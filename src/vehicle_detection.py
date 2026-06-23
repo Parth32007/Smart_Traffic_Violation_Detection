@@ -3,7 +3,7 @@ import cv2
 import os
 
 # Load YOLOv8 model
-model = YOLO("yolov8n.pt")
+model = YOLO("yolov8s.pt")
 
 # Video path
 video_path = "videos/input/traffic.mp4"
