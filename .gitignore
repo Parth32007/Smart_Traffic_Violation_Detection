@@ -6,3 +6,5 @@ videos/
 *.mp4
 
 yolov8n.pt
+
+datasets/

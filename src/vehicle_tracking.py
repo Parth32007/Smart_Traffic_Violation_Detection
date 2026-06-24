@@ -4,6 +4,14 @@ import cv2
 
 # Load model
 model = YOLO("yolov8s.pt")
+model.train(
+    data="datasets/helmet_dataset/data.yaml",
+    epochs=100,
+    imgsz=640,
+    batch=8,
+    patience=20,
+    name="helmet_detector"
+)
 
 # Open video
 cap = cv2.VideoCapture("videos/input/traffic.mp4")
