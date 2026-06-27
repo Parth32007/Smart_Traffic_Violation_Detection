@@ -1,9 +1,14 @@
 from ultralytics import YOLO
 import supervision as sv
 import cv2
+import os
 
 # Load model
-model = YOLO("yolov8s.pt")
+vehicle_model = YOLO("yolov8s.pt")
+
+helmet_model = YOLO(
+    "models/helmet_detector/best.pt"
+)
 
 # Open video
 cap = cv2.VideoCapture("videos/input/traffic_1.mp4")
@@ -15,7 +20,7 @@ fps = int(cap.get(cv2.CAP_PROP_FPS))
 
 # Output video
 out = cv2.VideoWriter(
-    "videos/output/motorcycle_tracking.mp4",
+    "videos/output/helmet_violation_output.mp4",
     cv2.VideoWriter_fourcc(*'mp4v'),
     fps,
     (width, height)
@@ -29,14 +34,18 @@ box_annotator = sv.BoxAnnotator()
 
 MOTORCYCLE_CLASS = 3
 
+os.makedirs("temp/motorcycles", exist_ok=True)
+
 while True:
+
+    helmet_predictions = {}
 
     ret, frame = cap.read()
 
     if not ret:
         break
 
-    results = model(frame, verbose=False)[0]
+    results = vehicle_model(frame, verbose=False)[0]
 
     detections = sv.Detections.from_ultralytics(results)
 
@@ -54,15 +63,12 @@ while True:
     )
 
     # Create folder to save motorcycle crops
-    import os
-    os.makedirs("temp/motorcycles", exist_ok=True)
-
     for bbox, tracker_id in zip(detections.xyxy, detections.tracker_id):
 
         x1, y1, x2, y2 = map(int, bbox)
 
         # Keep coordinates inside image boundaries
-        padding = 30
+        padding = 60
 
         x1 = max(0, x1 - padding)
         y1 = max(0, y1 - padding)
@@ -72,11 +78,26 @@ while True:
 
         crop = frame[y1:y2, x1:x2]
 
-        if crop.size != 0:
-            cv2.imwrite(
-                f"temp/motorcycles/{tracker_id}.jpg",
-                crop
-            )
+        if crop.size == 0:
+            continue
+
+        helmet_results = helmet_model.predict(
+            source=crop,
+            conf=0.15,
+            verbose=False
+        )
+
+        helmet_label = "Unknown"
+
+        if len(helmet_results[0].boxes) > 0:
+
+            cls = int(helmet_results[0].boxes[0].cls[0])
+
+            helmet_label = helmet_model.names[cls]
+
+        helmet_predictions[tracker_id] = helmet_label
+
+        print(f"Motorcycle ID:{tracker_id} -> {helmet_label}")
 
     labels = []
 
@@ -86,7 +107,7 @@ while True:
     ):
 
         labels.append(
-            f"Motorcycle ID:{tracker_id}"
+            f"ID:{tracker_id} | {helmet_predictions[tracker_id]}"
         )
 
     annotated_frame = box_annotator.annotate(
@@ -114,7 +135,7 @@ while True:
     out.write(annotated_frame)
 
     cv2.imshow(
-        "Vehicle Tracking",
+        "Helmet Violation Detection",
         annotated_frame
     )
 
